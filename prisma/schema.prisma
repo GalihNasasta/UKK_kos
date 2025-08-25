@@ -1,0 +1,96 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int      @id @default(autoincrement())
+  name            String   @default("")
+  email           String   @unique @default("")
+  password        String   @default("")
+  role            Role     @default(SOCIETY)
+  phone           Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  kos             Kos[]
+  review          reviews[]
+  books           books[]
+}
+
+model Kos {
+  id             Int       @id @default(autoincrement())
+  user           User      @relation(fields: [user_id], references: [id])
+  user_id        Int
+  name           String    @default("")
+  address        String    @default("")
+  price_per_mont Int       
+  gender         Gender    @default(ALL)
+  description    String    @default("") @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  kos_img        Kos_img[]
+  kos_facilities Kos_facilities[]
+  review         reviews[]
+  books          books[]
+}
+
+model Kos_img {
+  id             Int       @id @default(autoincrement())
+  kos            Kos       @relation(fields: [kos_id], references: [id])
+  kos_id         Int
+  file           String
+}
+
+model Kos_facilities {
+  id             Int       @id @default(autoincrement())
+  kos            Kos       @relation(fields: [kos_id], references: [id])
+  kos_id         Int
+  facility       String
+}
+
+model reviews {
+  id             Int       @id @default(autoincrement())
+  kos            Kos       @relation(fields: [kos_id], references: [id])
+  kos_id         Int
+  comment        String    @default("")
+  user           User      @relation(fields: [user_id], references: [id])
+  user_id        Int
+}
+
+model books {
+  id             Int       @id @default(autoincrement())
+  kos            Kos       @relation(fields: [kos_id], references: [id])
+  kos_id         Int
+  user           User      @relation(fields: [user_id], references: [id])
+  user_id        Int
+  startDate      DateTime  @default(now())
+  endDate        DateTime 
+}
+
+
+enum Role {
+  OWNER
+  SOCIETY
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  ALL
+}
+
+enum Status {
+  PENDING
+  ACCEPT
+  REJECT
+}
