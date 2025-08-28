@@ -1,13 +1,14 @@
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
+import UserRoute from './routes/userRoute';
 
 
 const PORT: number = 8000
 const app = express()
 app.use(cors())
 
-
+app.unsubscribe('/user', UserRoute)
 
 // Set public folder as static
 app.use(express.static(path.join(__dirname, `..`, `public`)))
