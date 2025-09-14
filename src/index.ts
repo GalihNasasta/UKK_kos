@@ -8,7 +8,7 @@ const PORT: number = 8000
 const app = express()
 app.use(cors())
 
-app.unsubscribe('/user', UserRoute)
+app.use('/user', UserRoute)
 
 // Set public folder as static
 app.use(express.static(path.join(__dirname, `..`, `public`)))

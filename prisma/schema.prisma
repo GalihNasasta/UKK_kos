@@ -19,7 +19,7 @@ model User {
   email           String   @unique @default("")
   password        String   @default("")
   role            Role     @default(SOCIETY)
-  phone           Int
+  phone           String   @default("")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   kos             Kos[]
@@ -28,34 +28,34 @@ model User {
 }
 
 model Kos {
-  id             Int       @id @default(autoincrement())
-  user           User      @relation(fields: [user_id], references: [id])
-  user_id        Int
-  name           String    @default("")
-  address        String    @default("")
-  price_per_mont Int       
-  gender         Gender    @default(ALL)
-  description    String    @default("") @db.Text
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  kos_img        Kos_img[]
-  kos_facilities Kos_facilities[]
-  review         reviews[]
-  books          books[]
+  id              Int       @id @default(autoincrement())
+  user            User      @relation(fields: [user_id], references: [id])
+  user_id         Int
+  name            String    @default("")
+  address         String    @default("")
+  price_per_month Int       
+  gender          Gender    @default(ALL)
+  desc            String    @default("") @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  kos_img         Kos_img[]
+  kos_facilities  Kos_facilities[]
+  review          reviews[]
+  books           books[]
 }
 
 model Kos_img {
   id             Int       @id @default(autoincrement())
   kos            Kos       @relation(fields: [kos_id], references: [id])
   kos_id         Int
-  file           String
+  file           String    @default("")
 }
 
 model Kos_facilities {
   id             Int       @id @default(autoincrement())
   kos            Kos       @relation(fields: [kos_id], references: [id])
   kos_id         Int
-  facility       String
+  facility       String    @default("")
 }
 
 model reviews {

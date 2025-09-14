@@ -8,6 +8,26 @@ import { sign } from "jsonwebtoken";
 
 const prisma = new PrismaClient({errorFormat:"pretty"})
 
+export const getAllUser = async (req: Request, res: Response) => {
+    try {
+        const { search } = req.query
+        const allUser = await prisma.user.findMany({
+            where: { name: { contains: search?.toString() || "" } }
+        })
+
+        return res.json({
+            status  : true,
+            data    : allUser,
+            message : `Ni usernye`
+        }).status(200)
+    } catch (error) {
+        return res.json({
+            status  : false,
+            message : `Ada error ni ye ${error}`
+        }).status(400)
+    }
+}
+
 export const createUser = async (req: Request, res: Response) => {
     try{
         const { name, email, password, role, phone } = req.body
@@ -60,7 +80,7 @@ export const auth = async (req: Request, res: Response) => {
             status  : true,
             logged  : true,
             data,
-            message : `Berhasil login brayy`
+            message : `Berhasil login brayy`, token
         }).status(200)
     } catch (error) {
         return res.json({
@@ -110,6 +130,6 @@ export const upToOwner = async (req: Request, res: Response) => {
     
     res.json({ message: "Cieee udah jadi owner nihh yee" });
 } catch (error) {
-    res.status(500).json({ message: "Gabisa jadi owner(belum punya kosan kali lu)", error });
+    res.status(500).json({ message: "Gabisa jadi owner nih(nginep aja udah)", error });
   }
 };

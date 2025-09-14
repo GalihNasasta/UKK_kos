@@ -10,6 +10,7 @@ const addDataScema = Joi.object({
     name    : Joi.string().required(),
     email   : Joi.string().required(),
     password: Joi.string().min(5).alphanum().required(),
+    phone   : Joi.string().min(12).max(12).required(),
     role    : Joi.string().valid('SOCIETY', 'OWNER').uppercase().required()
 })
 
