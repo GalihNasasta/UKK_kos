@@ -29,8 +29,8 @@ model User {
 
 model Kos {
   id              Int       @id @default(autoincrement())
-  user            User      @relation(fields: [user_id], references: [id])
   user_id         Int
+  user            User      @relation(fields: [user_id], references: [id])
   name            String    @default("")
   address         String    @default("")
   price_per_month Int       

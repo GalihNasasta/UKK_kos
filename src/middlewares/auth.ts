@@ -1,8 +1,8 @@
 import { NextFunction, Request, Response } from "express";
-import { JwtPayload, verify } from "jsonwebtoken";
+import { verify } from "jsonwebtoken";
 import { SECRET } from "../global";
 
-interface jwtPayload {
+interface JwtPayload {
     id      : String,
     name    : String,
     email   : String,
@@ -13,15 +13,15 @@ export const verifToken = (req: Request, res: Response, next: NextFunction) => {
     const token = req.headers.authorization?.split(' ') [1]
 
     if (!token) {
-        return res.status(400).json({
-            message: `EMOH! kamu ga ada akses😛`
+        return res.status(403).json({
+            message: `EMOH! token kamu ga ada akses😛`
         })
     }
 
     try {
-        const secretKey = SECRET || ""
-        const decoded   = verify(token, secretKey)
-        req.body.user   = decoded as JwtPayload
+        const secretKey     = SECRET || ""
+        const decoded       = verify(token, secretKey) as JwtPayload
+        ( req as any).user  = decoded
         next()
     }catch (error) {
         return res.json({
@@ -32,7 +32,7 @@ export const verifToken = (req: Request, res: Response, next: NextFunction) => {
 
 export const verifRole = (allowedRoles: string[]) => {
     return (req: Request, res: Response, next:NextFunction) => {
-        const user = req.body.user
+        const user = ( req as any ).user
 
         if (!user) {
             return res.json({

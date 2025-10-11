@@ -10,7 +10,7 @@ const addDataScema = Joi.object({
     name    : Joi.string().required(),
     email   : Joi.string().required(),
     password: Joi.string().min(5).alphanum().required(),
-    phone   : Joi.string().min(12).max(12).required(),
+    phone   : Joi.string().min(10).max(12).required(),
     role    : Joi.string().valid('SOCIETY', 'OWNER').uppercase().required()
 })
 
@@ -32,7 +32,7 @@ export const verifAuth = (
         return res.json({
             status  : false,
             message : error.details.map((it) => it.message).join() 
-        }).status(200)
+        }).status(400)
     }
     return next()
 }

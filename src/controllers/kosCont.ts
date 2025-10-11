@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { BASE_URL } from "../global";
 import fs from "fs"
 import path from "path";
+import { number } from "joi";
 
 const prisma = new PrismaClient({ errorFormat: 'pretty' })
 
@@ -29,36 +30,48 @@ export const getAllKos = async (req: Request, res: Response) => {
 
 export const addKos = async (req: Request, res: Response) => {
     try{
-        const { user_id, name, address, price_per_month, gender, desc } = req.body
-        
-        //buat data kos
+        const { name, address, price_per_month, gender, desc } = req.body
+        const user_id = ( req as any ).user.id
+        const files = req.body.files as Express.Multer.File[] | undefined
+
         const newKos = await prisma.kos.create({
-            data: { user_id , name, address, price_per_month: Number(price_per_month), gender, desc }
+            data: { 
+                user_id,
+                name,
+                address,
+                price_per_month: Number(price_per_month),
+                gender,
+                desc 
+            }
         })
 
-        //nyimpan foto di file
-        // let filename = ""
-        if (req.file) {await prisma.kos_img.create({
-            data: {
-                kos_id: newKos.id,
-                file: req.file.filename
-            }
-        })}
+        let images: any[] = []
+        if (files && files.length > 0) {
+            images = await Promise.all(files.map(async (file) => {
+                const img = await prisma.kos_img.create({
+                    data: {
+                        kos_id: newKos.id,
+                        file: `/kos_img/${file.filename}`
+                    }
+                })
+                return img
+            }))
+        }
 
-        return res.json({
+        return res.status(200).json({
             status: true,
-            data: newKos,
-            message: `Cie punya kos ni ye`
-        }).status(200)
+            data: newKos, images,
+            message: 'Cie kosnya baru ni ye'
+        })
     } catch (error) {
-        return res.json({
+        return res.status(400).json({
             status: false,
-            message: `Ada error ni: ${error}`
-        }).status(400)
+            message: `${error}`
+        })
     }
 }
 
-export const updateKos = async (req: Request, res: Response) => {
+export const updKos = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
         const { name, address, price_per_month, gender, desc } = req.body
@@ -68,8 +81,8 @@ export const updateKos = async (req: Request, res: Response) => {
             status: false,
             message: `kos ga ketemu`
         }).status(404)
-
-        //update data kos lu
+        
+        // update data kos lu 
         const updKos = await prisma.kos.update({
             where: {id: Number(id)},
             data: {
@@ -80,13 +93,13 @@ export const updateKos = async (req: Request, res: Response) => {
                 desc:               desc || findKos.desc
             }
         })
-
+        
         //klo update foto
         if (req.file) {
             const oldImg = await prisma.kos_img.findFirst({
                 where: { kos_id: updKos.id }
             })
-
+            
             //ngehapus foto yg lama
             if (oldImg) {
                 let imgPath = path.join(__dirname, `../../public/kos_img/${oldImg.file}`)
@@ -97,7 +110,8 @@ export const updateKos = async (req: Request, res: Response) => {
                 data: { kos_id: updKos.id, file: req.file.filename }
             })
         }
-
+        
+        
         return res.json({
             status: true,
             data: updKos,

@@ -112,24 +112,59 @@ export const register = async (req: Request, res: Response) => {
     }
 }
 
-export const upToOwner = async (req: Request, res: Response) => {
+export const editUser = async (req: Request, res: Response) => {
   try {
-      const User = (req as any).user.id; // dapet dari JWT middleware
-      
-    const user = await User.findById(User);
-    if (!user) {
-      return res.status(404).json({ message: "User gak ketemu nih" });
-    }
+    const {id} = req.params
+    const {name, email, password, role} = req.body
 
-    if (user.role === "OWNER") {
-      return res.status(400).json({ message: "Akun lau udah owner kocak" });
-    }
-    
-    user.role = "OWNER";
-    await user.save();
-    
-    res.json({ message: "Cieee udah jadi owner nihh yee" });
-} catch (error) {
-    res.status(500).json({ message: "Gabisa jadi owner nih(nginep aja udah)", error });
+    const findUser = await prisma.user.findFirst({ where: { id: Number(id) } })
+    if (!findUser) return res.json({
+        status: false,
+        message: `User gk ketemu nicxh`
+    }).status(400)
+
+    const updUser = await prisma.user.update({
+        data: {
+            name        :name || findUser.name,
+            email       :email || findUser.email,
+            password    :password ? md5(password) : findUser.password,
+            role        :role || findUser.role
+        },
+        where: { id: Number(id) }
+    })
+    return res.json({
+        status: true,
+        data: updUser,
+        message: `Berhasil update user cuyh`
+    }).status(200)
+  } catch (error) {
+    return res.json({
+        status: false,
+        message: `Gagal update cuyh // ${error}`
+    }).status(400)
   }
 };
+
+export const delUser = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params
+
+        const findUser = await prisma.user.findFirst({ where: { id: Number(id) } })
+        if (!findUser) return res.json({
+            status: false,
+            message: `User ga ada kocak`
+        }).status(200)
+
+        const delUser = await prisma.user.delete({
+            where: { id: Number(id) }
+        })
+
+        return res.json({
+            status: true,
+            data: delUser,
+            message: `Berhasil kehapus`
+        }).status(200)
+    } catch (error) {
+
+    }
+}
