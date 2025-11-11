@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `kos` ADD COLUMN `roomAvailable` INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN `roomTotal` INTEGER NOT NULL DEFAULT 0;

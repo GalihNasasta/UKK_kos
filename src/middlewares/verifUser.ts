@@ -1,5 +1,9 @@
 import { NextFunction, Request, Response } from "express";
 import Joi from "joi";
+import multer from "multer";
+
+const upload = multer()
+export const parseForm = upload.none()
 
 const authScema = Joi.object({
     email   : Joi.string().required(),
@@ -37,11 +41,7 @@ export const verifAuth = (
     return next()
 }
 
-export const verifAddUser = (
-    req : Request,
-    res : Response,
-    next: NextFunction
-) => {
+export const verifAddUser = (req: Request, res: Response, next: NextFunction) => {
     const { error } = addDataScema.validate(req.body, { abortEarly: false })
 
     if (error) {
@@ -53,11 +53,8 @@ export const verifAddUser = (
     return next()
 }
 
-export const verifEditUser = (
-    req : Request,
-    res : Response,
-    next: NextFunction
-) => {
+
+export const verifEditUser = (req: Request, res: Response, next: NextFunction) => {
     const { error } = editDataScema.validate(req.body, { abortEarly: false })
 
     if (error) {

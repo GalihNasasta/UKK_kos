@@ -34,6 +34,8 @@ model Kos {
   name            String    @default("")
   address         String    @default("")
   price_per_month Int       
+  roomTotal       Int       @default(0)
+  roomAvailable   Int       @default(0)
   gender          Gender    @default(ALL)
   desc            String    @default("") @db.Text
   createdAt       DateTime  @default(now())
@@ -46,9 +48,10 @@ model Kos {
 
 model Kos_img {
   id             Int       @id @default(autoincrement())
-  kos            Kos       @relation(fields: [kos_id], references: [id])
   kos_id         Int
   file           String    @default("")
+  isThumbnail    Boolean   @default(false)
+  kos            Kos       @relation(fields: [kos_id], references: [id])
 }
 
 model Kos_facilities {
@@ -63,6 +66,7 @@ model reviews {
   kos            Kos       @relation(fields: [kos_id], references: [id])
   kos_id         Int
   comment        String    @default("")
+  reply          String?  
   user           User      @relation(fields: [user_id], references: [id])
   user_id        Int
 }
@@ -74,7 +78,8 @@ model books {
   user           User      @relation(fields: [user_id], references: [id])
   user_id        Int
   startDate      DateTime  @default(now())
-  endDate        DateTime 
+  endDate        DateTime  @default(now())
+  Status         Status
 }
 
 

@@ -1,7 +1,9 @@
 import { NextFunction, Request, Response } from "express"
-import { request } from "http"
 import Joi from "joi"
-import { userInfo } from "os"
+import multer from "multer"
+
+const upload = multer()
+export const parseForm = upload.none()
 
 const addDataSchema = Joi.object({
     name            : Joi.string().required(),
@@ -9,6 +11,8 @@ const addDataSchema = Joi.object({
     price_per_month : Joi.number().required(),
     gender          : Joi.string().valid("MALE", "FEMALE", "ALL").required(),
     desc            : Joi.string().optional(),
+    roomTotal       : Joi.number().min(0).required(),
+    roomAvailable   : Joi.number().min(0).required(),
     user            : Joi.optional(),
     userId          : Joi.optional()
 })
@@ -19,6 +23,8 @@ const editDataSchema = Joi.object({
     price_per_month : Joi.number().optional(),
     gender          : Joi.string().valid("MALE", "FEMALE", "ALL").optional(),
     desc            : Joi.string().optional(),
+    roomTotal       : Joi.number().min(0).optional(),
+    roomAvailable   : Joi.number().min(0).optional(),
     user            : Joi.optional(),
     userId          : Joi.optional()
 })

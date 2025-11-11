@@ -12,7 +12,18 @@ export const getAllKos = async (req: Request, res: Response) => {
     try {
         const {search} = req.query
         const allKos = await prisma.kos.findMany({
-            where: { name: { contains: search?.toString() || "" } }
+            where: { name: { contains: search?.toString() || "" } },
+            include: {
+                user: { select: { id: true, name: true, phone: true } },
+                kos_facilities: true,
+                review: true,
+                books: true,
+                kos_img: {
+                    where: { isThumbnail: true },
+                    select: { file: true }
+                }
+            },
+            orderBy: { id: "desc" }
         })
 
         return res.json({
@@ -24,138 +35,222 @@ export const getAllKos = async (req: Request, res: Response) => {
         return res.json({
             status: false,
             message: `ade eyoy ni eyoy ${error}`
-        }).status(400)
+        }).status(500)
     }
 }
 
 export const addKos = async (req: Request, res: Response) => {
     try{
-        const { name, address, price_per_month, gender, desc } = req.body
-        const user_id = ( req as any ).user.id
-        const files = req.body.files as Express.Multer.File[] | undefined
+        const { name, address, price_per_month, gender, desc, roomTotal, roomAvailable } = req.body
+        const user = ( req as any ).user
 
-        const newKos = await prisma.kos.create({
-            data: { 
-                user_id,
-                name,
-                address,
-                price_per_month: Number(price_per_month),
-                gender,
-                desc 
-            }
-        })
+        if (!user) {
+      return res.status(401).json({
+        status: false,
+        message: "User tidak ditemukan dalam token",
+      });
+    }
 
-        let images: any[] = []
-        if (files && files.length > 0) {
-            images = await Promise.all(files.map(async (file) => {
-                const img = await prisma.kos_img.create({
-                    data: {
-                        kos_id: newKos.id,
-                        file: `/kos_img/${file.filename}`
-                    }
-                })
-                return img
-            }))
+        // Hanya owner yang boleh buat kos
+        if (user.role !== "OWNER") {
+      return res.status(403).json({
+        status: false,
+        message: "Hanya owner yang dapat membuat kos",
+      });
+    }
+
+    let filename = ""
+    if (req.file) filename = req.file.filename
+
+    const newKos = await prisma.kos.create({
+        data: { 
+            name,
+            address,
+            price_per_month: Number(price_per_month),
+            desc,
+            gender,
+            user_id: user.id,
+            roomTotal: Number(roomTotal),
+            roomAvailable: Number(roomAvailable)
         }
+    })
 
-        return res.status(200).json({
+        return res.json({
             status: true,
-            data: newKos, images,
-            message: 'Cie kosnya baru ni ye'
-        })
+            message: 'Cie kosnya baru ni ye',
+            data: newKos,
+        }).status(200)
     } catch (error) {
-        return res.status(400).json({
+        return res.json({
             status: false,
-            message: `${error}`
-        })
+            message: `ada error dah ni. ${error}`
+        }).status(500)
     }
 }
 
 export const updKos = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const { name, address, price_per_month, gender, desc } = req.body
+        const user = (req as any).user
+        const { name, address, price_per_month, gender, desc, roomTotal, roomAvailable } = req.body
 
         const findKos = await prisma.kos.findFirst({ where: { id: Number(id) } })
         if (!findKos) return res.json({
             status: false,
             message: `kos ga ketemu`
         }).status(404)
+
+        // Pastikan hanya owner pemilik kos yang bisa ubah
+        if (user.role !== "OWNER" || user.id !== findKos.user_id) {
+            return res.json({
+            status: false,
+            message: "Kamu ga berhak mengedit kos ini",
+         }).status(403)
+        }
         
         // update data kos lu 
         const updKos = await prisma.kos.update({
             where: {id: Number(id)},
             data: {
-                name:               name || findKos.name,
-                address:            address || findKos.address,
+                name:               name ?? findKos.name,
+                address:            address ?? findKos.address,
                 price_per_month:    price_per_month ? Number(price_per_month) : findKos.price_per_month,
-                gender:             gender || findKos.gender,
-                desc:               desc || findKos.desc
+                desc:               desc ?? findKos.desc,
+                gender:             gender ?? findKos.gender,
+                roomTotal:          roomTotal ? Number(roomTotal) : findKos.roomTotal,
+                roomAvailable:      roomAvailable ? Number(roomAvailable) : findKos.roomAvailable
             }
-        })
-        
-        //klo update foto
-        if (req.file) {
-            const oldImg = await prisma.kos_img.findFirst({
-                where: { kos_id: updKos.id }
-            })
-            
-            //ngehapus foto yg lama
-            if (oldImg) {
-                let imgPath = path.join(__dirname, `../../public/kos_img/${oldImg.file}`)
-                if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath) 
-                    await prisma.kos_img.delete({where: { id: oldImg.id }})
-            }
-            await prisma.kos_img.create({
-                data: { kos_id: updKos.id, file: req.file.filename }
-            })
-        }
-        
+        })        
         
         return res.json({
             status: true,
+            message: "Berhasil lau ganti",
             data: updKos,
-            message: "Berhasil lau ganti"
         }).status(200)
     } catch (error) {
         return res.json({
             status: false,
             message: `Eyoy kocak ${error}`
-        }).status(400)
+        }).status(500)
     }
 }
 
 export const delKos = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-
-        const findKos = await prisma.kos.findFirst({ where: { id: Number(id) } })
+        const user = (req as any).user
+        const findKos = await prisma.kos.findUnique({
+            where: { id: Number(id) },
+            include: { books: true, review: true, kos_facilities: true }
+        })
+        
         if (!findKos) return res.json({
-            message: `GADA ID KOSNYA WOI :) ${id}`
+            message: `GADA ID KOSNYA WOI :). Id kos yg ga ketemu: ${id}`
         }).status(404)
+        
+        if (user.role !== "OWNER" || user.id !== findKos.user_id) {
+            return res.json({
+            status: false,
+            message: "Kamu ga berhak mengedit kos ini",
+         }).status(403)
+        }
 
-        const images = await prisma.kos_img.findMany({
-            where: { kos_id:findKos.id }
-        })
+        await prisma.books.deleteMany({ where: { kos_id: Number(id) } });
+        await prisma.reviews.deleteMany({ where: { kos_id: Number(id) } });
+        await prisma.kos_facilities.deleteMany({ where: { kos_id: Number(id) } });
+        await prisma.kos_img.deleteMany({ where: { kos_id: Number(id) } });
 
-        images.forEach((img) => {
-            let imgPath = path.join(__dirname, `../../public/kos_img/${img.file}`)
-            if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath)
-        })
-
-        await prisma.kos_img.deleteMany({ where: { kos_id: findKos.id } })
-        const delKos = await prisma.kos.delete({ where: { id: findKos.id } })
+        await prisma.kos.delete({ where: { id: findKos.id } })
 
         return res.json({
             status: true,
-            data: delKos,
-            message: `Berhasil hapus u punya kos`
+            message: `Berhasil hapus data kos '${findKos.name}'`
         }).status(200)
     } catch (error) {
         return res.json({
             status: false,
-            message: `Gbs hapus u punya kos ni. 
-                    Ad eyoy ${error}`
-        }).status(400)
+            message: `Gbs hapus u punya kos ni. Ad eyoy ${error}`
+        }).status(500)
+    }
+}
+
+export const getAvailableKos = async (req: Request, res: Response) => {
+    try {
+        const available = await prisma.kos.findMany({
+            where: { roomAvailable: { gt: 0 } },
+            include: {
+                user: { select: { id: true, name: true, phone: true } },
+                kos_facilities: true
+            },
+            orderBy: { price_per_month: "desc" }
+        })
+
+        if (available.length === 0) {
+            return res.json({
+                status: false,
+                message: `Gaada kos yang kosong nih`
+            }).status(404)
+        }
+
+        return res.json({
+            status: true,
+            message: `Berhasil nampilkan kos yang bisa dipesan.`,
+            data: available
+        }).status(200)
+
+    } catch (error) {
+        return res.json({
+            status: false,
+            message: `Ada error waktu mengambil data. ${error}`
+        }).status(500)
+    }
+}
+
+export const getGenderKos = async(req: Request, res: Response) => {
+    try {
+        const { gender } = req.query
+
+        if (!gender) {
+            return res.json({
+                status: false,
+                message: `Wajib mengisi parameter 'gender'. Contoh: /kos/filter?gender=male `
+            }).status(400)
+        }
+
+        const allowedGender = ["MALE", "FEMALE", "ALL"]
+        if (!allowedGender.includes(gender.toString().toLowerCase())) {
+            return res.json({
+                status: false,
+                message: `Gender '${gender}' gak valid. pake ini: ${allowedGender.join(", ")}.`
+            }).status(400)
+        }
+
+        const kosList = await prisma.kos.findMany({
+            where: {
+                gender: gender.toString().toLowerCase() as any,
+                roomAvailable: { gt: 0 }
+            },
+            include: { kos_facilities: true, user: true }
+        })
+
+        if (kosList.length === 0) {
+            return res.json({
+                status: false,
+                message: `Gaada kos dengan gender ${gender} yang available.`
+            }).status(404)
+        }
+
+        return res.json({
+            status: true,
+            message: `Berhasil nampilin kos dengan gender ${gender}.`,
+            total: kosList.length,
+            data: kosList
+        }).status(200)
+
+    } catch (error) {
+        return res.json({
+            status: false,
+            message: `Ada error ni. ${error}`
+        }).status(500)
     }
 }
