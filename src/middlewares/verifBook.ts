@@ -1,50 +1,84 @@
 import { Request, Response, NextFunction } from "express";
 import Joi from "joi";
 import multer from "multer";
-import { join } from "path";
 
-const upload = multer()
+const upload = multer();
 
-const addDataSchema = Joi.object({
-    kosId: Joi.number().required(),
-    startDate:Joi.date().iso().required(),
-    endDate:Joi.date().iso().required(),
-    status: Joi.string().valid("PENDING", "REJECT", "ACCEPT").optional()
-}).unknown(true)
+// Skema umum
+const schemaForSocietyAdd = Joi.object({
+    kos_id: Joi.number().required(),
+    startDate: Joi.date().iso().required(),
+    endDate: Joi.date().iso().required(),
+    Status: Joi.forbidden().messages({
+        "any.unknown": "Kamu tidak boleh menambahkan status booking (otomatis PENDING)."
+    })
+}).unknown(true);
 
-const editDataSchema = Joi.object({
-    kosId: Joi.number().optional(),
-    startDate:Joi.date().iso().optional(),
-    endDate:Joi.date().iso().optional(),
-    status: Joi.string().valid("PENDING", "REJECT", "ACCEPT").optional()
-}).unknown(true)
+const schemaForSocietyEdit = Joi.object({
+    kos_id: Joi.number().optional(),
+    startDate: Joi.date().iso().optional(),
+    endDate: Joi.date().iso().optional(),
+    Status: Joi.forbidden().messages({
+        "any.unknown": "Kamu tidak boleh mengubah status booking."
+    })
+}).unknown(true);
 
-export const verifAddBook = [
-    upload.none,
+const schemaForOwnerEditStatus = Joi.object({
+    startDate: Joi.forbidden().messages({
+        "any.unknown": "Kamu tidak boleh mengubah tgl booking."
+    }),
+    endDate: Joi.forbidden().messages({
+        "any.unknown": "Kamu tidak boleh mengubah tgl booking."
+    }),
+    Status: Joi.string().valid("PENDING", "REJECT", "ACCEPT").required().messages({
+        "any.required": "Owner hanya bisa update/edit status booking society.",
+        "any.only": "Status hanya boleh PENDING, REJECT, atau ACCEPT."
+    })
+}).unknown(true);
+
+
+// Middleware utama
+export const verifBook = (action: "ADD" | "EDIT") => [
+    upload.none(),
     (req: Request, res: Response, next: NextFunction) => {
-        const { error } = addDataSchema.validate(req.body, { abortEarly: false })
+        const user = (req as any).user;
 
-        if (error) {
-            return res.json({
+        if (!user) {
+            return res.status(401).json({
                 status: false,
-                message: error.details.map(it => it.message).join(", ")
-            })
+                message: "Token user tidak ditemukan"
+            });
         }
-        return next()
-    }
-]
 
-export const verifEditBook = [
-    upload.none,
-    (req: Request, res: Response, next: NextFunction) => {
-        const { error } = addDataSchema.validate(req.body, { abortEarly: false })
+        let schema;
 
-        if (error) {
-            return res.json({
+        if (user.role === "SOCIETY") {
+            // Society hanya boleh tambah/edit tanpa ubah status
+            schema = action === "ADD" ? schemaForSocietyAdd : schemaForSocietyEdit;
+        } else if (user.role === "OWNER") {
+            // Owner hanya boleh ubah status booking
+            if (action === "EDIT") schema = schemaForOwnerEditStatus;
+            else {
+                return res.status(403).json({
+                    status: false,
+                    message: "Owner tidak bisa membuat booking"
+                });
+            }
+        } else {
+            return res.status(403).json({
                 status: false,
-                message: error.details.map(it => it.message).join(", ")
-            })
+                message: "Role kamu tidak dikenali"
+            });
         }
-        return next()
+
+        const { error } = schema.validate(req.body, { abortEarly: false });
+        if (error) {
+            return res.status(400).json({
+                status: false,
+                message: error.details.map(e => e.message).join(", ")
+            });
+        }
+
+        next();
     }
-]
+];

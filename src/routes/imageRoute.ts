@@ -1,13 +1,16 @@
-// import express from "express";
-// import { verifRole, verifToken } from "../middlewares/auth";
-// import { getKosImg, upKosImg, delKosImg } from "../controllers/imageCont";
-// import { upKosImg } from "../middlewares/verifImage";
+import { Router } from "express";
+import { verifRole, verifToken } from "../middlewares/auth";
+import { upKosImg, getKosImg, delKosImg } from "../controllers/imageCont";
+import { upKosImg as multerUpload, validateKosAndImages } from "../middlewares/verifImage";
+import { Role } from "@prisma/client";
 
-// const app = express()
+const router = Router()
 
-// app.get("/:kos_id", getKosImg)
-// app.post("/", [verifToken, verifRole(["OWNER"])], upKosImg.fields([{ name: "thumbnail", maxCount: 1 }, { name: "photos", maxCount: 4 }]), addPicture)
-// app.put("/updImage/:kos_id", [verifToken, verifRole(["OWNER"]), upKosImg.single("image")], updKosUpload)
-// app.delete("/:img_id", [verifToken, verifRole(["OWNER"])], delPictureKos)
+router.get('/kos/:kos_id/', getKosImg);
 
-// export default app
+router.use(verifToken);
+router.use(verifRole([Role.OWNER]));
+router.post('/kos/:kos_id/', validateKosAndImages, multerUpload, upKosImg);
+router.delete('/kos/:kos_id/img/:img_id', delKosImg);
+
+export default router;

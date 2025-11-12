@@ -6,7 +6,7 @@ import Kos from './routes/kosRoute';
 import Facility from './routes/facilityRoute'
 import Book from './routes/bookRoute'
 import Review from './routes/reviewRoute'
-// import Image from './routes/imageRoute'
+import Image from './routes/imageRoute'
 import multer from 'multer';
 
 
@@ -20,7 +20,7 @@ app.use('/kos', Kos)
 app.use('/facility', Facility)
 app.use('/book', Book)
 app.use('/review', Review)
-// app.use('/image', Image)
+app.use('/image', Image)
 
 // Setup multer
 const upload = multer({ dest: "uploads/" })

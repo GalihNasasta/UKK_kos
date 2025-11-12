@@ -46,64 +46,74 @@ export const getAllBook = async (req: Request, res: Response) => {
 export const addBook = async (req: Request, res: Response) => {
     try {
         const user = (req as any).user
-
         if (!user) {
-            return res.json({
+            return res.status(401).json({
                 status: false,
-                message: `User token ga ketemu`
-            }).status(404)
+                message: "Token user tidak ditemukan."
+            })
         }
 
         if (user.role !== "SOCIETY") {
-            return res.json({
+            return res.status(403).json({
                 status: false,
-                message: `Hanya society yang bisa booking kos`
-            }).status(403)
+                message: "Hanya society yang bisa melakukan booking."
+            })
         }
 
         const { startDate, endDate, kos_id } = req.body
+        if (!kos_id || !startDate || !endDate) {
+            return res.status(400).json({
+                status: false,
+                message: "Data booking tidak lengkap (kos_id, startDate, endDate wajib diisi)."
+            })
+        }
+
+        const start = new Date(startDate)
+        const end = new Date(endDate)
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) {
+            return res.status(400).json({
+                status: false,
+                message: "Tanggal tidak valid. Pastikan format benar dan endDate > startDate."
+            })
+        }
 
         const kos = await prisma.kos.findUnique({ where: { id: Number(kos_id) } })
         if (!kos) {
-            return res.json({
+            return res.status(404).json({
                 status: false,
-                message: `Id kos ${kos_id}, ga ketemu`
+                message: `Kos dengan id ${kos_id} tidak ditemukan.`
             })
         }
 
         const existedBook = await prisma.books.findFirst({
-            where: {
-                user_id: user.id,
-                kos_id: Number(kos_id),
-                Status: "PENDING"
-            }
+            where: { user_id: user.id, kos_id: Number(kos_id), Status: Status.PENDING }
         })
         if (existedBook) {
-            return res.json({
+            return res.status(400).json({
                 status: false,
-                message: `Kamu udah pernah booking disini nih.`
-            }).status(400)
+                message: "Kamu sudah memiliki booking pending di kos ini."
+            })
         }
 
         const newBook = await prisma.books.create({
             data: {
-                startDate: new Date(startDate),
-                endDate: new Date(endDate),
+                startDate: start,
+                endDate: end,
                 kos_id: Number(kos_id),
                 user_id: user.id,
                 Status: Status.PENDING
             }
         })
 
-        return res.json({
+        return res.status(201).json({
             status: true,
-            message: `${user.name} Berhasil booking di ${kos.name}`,
+            message: `${user.name} berhasil booking di ${kos.name}`,
             data: newBook
-        }).status(200)
+        })
     } catch (error: any) {
-        return res.json({
+        return res.status(500).json({
             status: false,
-            message: `Error waktu booking ni. ${error.message}`
+            message: `Error saat membuat booking: ${error.message}`
         })
     }
 }
@@ -141,7 +151,7 @@ export const updBook = async (req: Request, res: Response) => {
                 }).status(400)
             }
 
-            if (status && status !== findBook.Status) {
+            if (Status && Status !== findBook.Status) {
                 return res.json({
                     status: false,
                     message: "Cuma atmin yg bole ganti status booking"
@@ -261,106 +271,138 @@ export const delBook = async (req: Request, res: Response) => {
 
 export const getHistoryBook = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user
-        const { month, year } = req.query
-
-        if (!user || user.role != "OWNER") {
-            return res.json({
-                status: false,
-                message: "Cuma owner yang bisa akses history booking"
-            }).status(400)
-        }
+        const user = (req as any).user;
+        const { month, year } = req.query;
 
         if (!month || !year) {
             return res.json({
                 status: false,
-                message: "Wajib menyertakan parameter 'month' dan 'year'; "
-            }).status(404)
-        }
-
-        const ownerKos = await prisma.kos.findMany({
-            where: { user_id: user.id },
-            select: { id: true }
-        })
-
-        if (ownerKos.length === 0) {
-            return res.json({
-                status: false,
-                message: "Blum add kos lu"
+                message: "Parameter 'month' dan 'year' wajib disertakan. Contoh: /book/history?month=10&year=2025",
             }).status(400)
         }
 
-        const kosId = ownerKos.map((k) => k.id)
-        const startDate = new Date(Number(year), Number(month) - 1, 1)
-        const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59)
-
-        const books = await prisma.books.findMany({
-            where: {
-                kos_id: { in: kosId },
-                startDate: { gte: startDate, lte: endDate }
-            },
-            include: {
-                kos: { select: { id: true, name: true, address: true } },
-                user: { select: { id: true, name: true, phone: true } }
-            },
-            orderBy: { startDate: "desc" }
-        })
-
-        if (books.length === 0) {
+        if (isNaN(Number(month)) || isNaN(Number(year)) || Number(month) < 1 || Number(month) > 12) {
             return res.json({
                 status: false,
-                message: "Gada aktifitas di tanggal tersebut"
+                message: "Parameter 'month' harus antara 1–12 dan 'year' harus angka valid.",
+            }).status(400)
+        }
+
+
+        const startDate = new Date(Number(year), Number(month) - 1, 1, 0, 0, 0)
+        const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59)
+
+
+        let booking;
+
+        // 🔹 Cek role
+        if (user.role === "OWNER") {
+            // Owner → lihat semua booking di kos miliknya
+            const ownerKos = await prisma.kos.findMany({
+                where: { user_id: user.id },
+                select: { id: true },
+            });
+
+            if (ownerKos.length === 0) {
+                return res.json({
+                    status: false,
+                    message: "Anda belum memiliki kos.",
+                }).status(404)
+            }
+
+            const kosIds = ownerKos.map((k) => k.id);
+
+            booking = await prisma.books.findMany({
+                where: {
+                    kos_id: { in: kosIds },
+                    startDate: { gte: startDate, lte: endDate },
+                },
+                include: {
+                    kos: { select: { id: true, name: true, address: true } },
+                    user: { select: { id: true, name: true, phone: true } },
+                },
+                orderBy: { startDate: "desc" },
+            });
+
+        } else if (user.role === "SOCIETY") {
+            // Society → lihat booking miliknya sendiri
+            booking = await prisma.books.findMany({
+                where: {
+                    user_id: user.id,
+                    startDate: { gte: startDate, lte: endDate },
+                },
+                include: {
+                    kos: { select: { id: true, name: true, address: true } },
+                },
+                orderBy: { startDate: "desc" },
+            });
+        } else {
+            return res.json({
+                status: false,
+                message: "Role tidak dikenali.",
+            }).status(403)
+        }
+
+        if (!booking || booking.length === 0) {
+            return res.json({
+                status: false,
+                message: "Tidak ada histori booking untuk bulan tersebut.",
             }).status(404)
         }
 
         return res.json({
             status: true,
-            message: "Nih histori bookingmu",
-            total: books.length,
-            data: books
+            role: user.role,
+            month: Number(month),
+            year: Number(year),
+            total: booking.length,
+            data: booking,
         }).status(200)
 
     } catch (error) {
+        console.error("Error getBookHistory:", error);
         return res.json({
             status: false,
-            message: `Ada error ni. ${error}`
-        })
+            message: `Terjadi kesalahan server: ${error}`,
+        }).status(500)
     }
-}
+};
+
 
 export const getBookReceipt = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user
-        const id = req.params
-        const download = req.query
+        const user = (req as any).user;
+        const { id } = req.params;
+        const { download } = req.query; // <== tambahan query untuk mode download
 
         const book = await prisma.books.findUnique({
             where: { id: Number(id) },
             include: {
                 kos: true,
-                user: true
-            }
-        })
+                user: true,
+            },
+        });
 
         if (!book) {
-            return res.json({
+            return res.status(404).json({
                 status: false,
-                message: "Gak ketemu nih bookingnya"
-            }).status(404)
+                message: "Booking tidak ditemukan",
+            });
         }
 
+        // ✅ Pastikan booking milik user society yang login
         if (user.role !== "SOCIETY" || book.user_id !== user.id) {
-            return res.json({
+            return res.status(403).json({
                 status: false,
-                message: "Kamu ga berhak akses nota ini."
-            }).status(400)
+                message: "Kamu tidak memiliki akses ke nota ini",
+            });
         }
 
         if (book.Status !== "ACCEPT") {
-            return res.json({
+            return res.status(400).json({
                 status: false,
-                message: `Booking harus diacc sm owner baru bisa download nota kocak.`
-            })
+                message: "Nota hanya bisa dicetak jika booking sudah diterima oleh owner",
+            });
         }
 
         const receipt = {
@@ -386,38 +428,46 @@ export const getBookReceipt = async (req: Request, res: Response) => {
             }),
         };
 
-        //Kirim json klo gk donwload
+        // 🧾 Jika tidak download, kirim JSON
         if (!download) {
-            return res.json({
-                status: false,
-                message: `Berhasil ambil nota.`,
-                data: receipt
-            }).status(200)
+            return res.status(200).json({
+                status: true,
+                message: "Nota berhasil diambil",
+                data: receipt,
+            });
         }
 
-        const doc = new PDFDocument({ margin: 50 })
-        doc.font("Courier")
+        // 📄 Kalau ada query ?download=true → buat PDF
+        const doc = new PDFDocument({ margin: 50 });
 
-        const folderPath = path.join(__dirname, "../../public/receipt")
-        if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath, { recursive: true })
+        const folderPath = path.join(__dirname, "../../public/receipt");
+        if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath, { recursive: true });
 
-        const filepath = path.join(folderPath, `nota_booking_${book.id}.pdf`)
-        const stream = fs.createWriteStream(filepath)
-        doc.pipe(stream)
+        const margin = (doc.options.margin as number) || 50;
+        const pageWidth = (doc.page.width as number);
+        const contentWidth = pageWidth - margin * 7
 
+        const filePath = path.join(folderPath, `nota_booking_${book.id}.pdf`);
+        const stream = fs.createWriteStream(filePath);
+        doc.pipe(stream);
+
+        // 🔹 Header
         doc.fontSize(18).text("NOTA PEMESANAN KOS", { align: "center" });
+        doc.text("------------------------------------------------------------------------------------");
         doc.moveDown(2);
         doc.fontSize(12);
 
+        // Fungsi bantu untuk sejajarkan teks
         const addRow = (label: string, value: string | number) => {
-            const spacing = 130
-            const y = doc.y
+            const spacing = 130; // Lebar kolom label (sesuaikan)
+            const y = doc.y; // posisi vertikal sekarang
             doc.text(`${label}`, 50, y);
             doc.text(": ", 50 + spacing - 5, y);
             doc.text(String(value), 50 + spacing + 5, y);
             doc.moveDown();
-        }
+        };
 
+        // 🔹 Isi Nota
         addRow("Nama Penyewa", receipt.namaPenyewa);
         addRow("Nama Kos", receipt.namaKos);
         addRow("Alamat Kos", receipt.alamatKos);
@@ -428,23 +478,26 @@ export const getBookReceipt = async (req: Request, res: Response) => {
         addRow("Tanggal Cetak", receipt.tanggalCetak);
 
         doc.moveDown(4);
-        doc.text("=================================================", { align: "left" });
-        doc.text("Terima kasih telah menggunakan layanan KosHunter!", {
-            align: "left",
-        });
+        doc.fontSize(16).text(
+            "Terimakasih telah menggunakan website Kos Hunter :)",
+            {
+                align: "center",
+                width: contentWidth,
+            }
+        );
 
         doc.end();
 
+        // Setelah PDF selesai dibuat, kirim file ke user
         stream.on("finish", () => {
-            res.download(filepath, `nota_booking_${book.id}.pdf`, (err) => {
-                if (err) console.error("Gagal download file: ", err)
-            } )
-        })
-
+            res.download(filePath, `nota_booking_${book.id}.pdf`, (err) => {
+                if (err) console.error("Gagal mengunduh file:", err);
+            });
+        });
     } catch (error) {
-        return res.json({
+        return res.status(500).json({
             status: false,
-            message: `Error waktu cetak nota. ${error}`
-        }).status(400)
+            message: `Error saat mencetak nota: ${error}`,
+        });
     }
 }
